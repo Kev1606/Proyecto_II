@@ -18,6 +18,22 @@ typedef struct {
     size_t numBlocks;
 } FileMetadata;
 
+struct Data {
+    bool create;
+    bool extract;
+    bool list;
+    bool delete;
+    bool update;
+    bool verbose;
+    bool veryVerbose;
+    bool file;
+    bool append;
+    bool defrag;
+    char *outputFile;
+    char **inputFiles;
+    int numInputFiles;
+};
+
 typedef struct {
     FileMetadata files[MAX_FILES];
     size_t numFiles;
@@ -105,19 +121,19 @@ void writeFAT(FILE* archive, FileAllocationTable* fat) {
     fwrite(fat, sizeof(FileAllocationTable), 1, archive);
 }
 
-void createArchive(const char *outputFile, char **inputFiles, int numInputFiles, bool verbose, bool veryVerbose, bool appendMode) {
-    if (verbose) printf("Creando archivo %s\n", outputFile);
-    FILE* archive = fopen(outputFile, appendMode ? "rb+" : "wb");
+void createArchive(struct Data data) {
+    if (data.verbose) printf("Creando archivo %s\n.......", data.outputFile);
+    FILE* archive = fopen(data.outputFile, "wb");
 
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo %s\n", outputFile);
+        fprintf(stderr, "Error al abrir el archivo %s\n", data.outputFile);
         exit(EXIT_FAILURE);
     }
 
     FileAllocationTable fat;
     memset(&fat, 0, sizeof(FileAllocationTable));
 
-    if (!appendMode) {
+    if (!data.append) {
         fat.freeBlocks[0] = sizeof(FileAllocationTable);
         fat.numFreeBlocks = 1;
         fwrite(&fat, sizeof(FileAllocationTable), 1, archive);
@@ -125,15 +141,15 @@ void createArchive(const char *outputFile, char **inputFiles, int numInputFiles,
         fread(&fat, sizeof(FileAllocationTable), 1, archive);
     }
 
-    if (numInputFiles > 0 || appendMode) {
-        for (int i = 0; i < numInputFiles; i++) {
-            FILE* inputFile = fopen(inputFiles[i], "rb");
+    if (data.numInputFiles > 0 && data.file) {
+        for (int i = 0; i < data.numInputFiles; i++) {
+            FILE* inputFile = fopen(data.inputFiles[i], "rb");
             if (inputFile == NULL) {
-                fprintf(stderr, "Error al abrir el archivo %s\n", inputFiles[i]);
+                fprintf(stderr, "Error al abrir el archivo %s\n", data.inputFiles[i]);
                 continue;
             }
 
-            if (verbose) printf("Agregando archivo %s\n", inputFiles[i]);
+            if (data.verbose) printf("Agregando archivo %s\n.......", data.inputFiles[i]);
             size_t fileSize = 0;
             Block block;
             size_t bytesRead;
@@ -141,13 +157,13 @@ void createArchive(const char *outputFile, char **inputFiles, int numInputFiles,
             while ((bytesRead = fread(&block, 1, sizeof(Block), inputFile)) > 0) {
                 size_t blockPosition = findFreeBlock(&fat);
                 if (blockPosition == (size_t)-1) {
-                    if (veryVerbose) {
+                    if (data.veryVerbose) {
                         printf("No hay bloques libres, expandiendo el archivo\n");
                     }
                     expandArchive(archive, &fat);
                     blockPosition = findFreeBlock(&fat);
-                    if (veryVerbose) {
-                        printf("Nuevo bloque libre en la posición %zu\n", blockPosition);
+                    if (data.veryVerbose) {
+                        printf("Nuevo bloque libre en la posición %zu\n.......", blockPosition);
                     }
                 }
 
@@ -156,21 +172,21 @@ void createArchive(const char *outputFile, char **inputFiles, int numInputFiles,
                 }
 
                 writeBlock(archive, &block, blockPosition);
-                updateFAT(&fat, inputFiles[i], fileSize, blockPosition, bytesRead);
+                updateFAT(&fat, data.inputFiles[i], fileSize, blockPosition, bytesRead);
 
                 fileSize += bytesRead;
 
-                if (veryVerbose) {
-                    printf("Escribiendo bloque %zu para archivo %s\n", blockPosition, inputFiles[i]);
+                if (data.veryVerbose) {
+                    printf("Escribiendo bloque %zu para archivo %s\n.......", blockPosition, data.inputFiles[i]);
                 }
             }
 
-            if (verbose) printf("Tamaño del archivo %s: %zu bytes\n", inputFiles[i], fileSize);
+            if (data.verbose) printf("Tamaño del archivo %s: %zu bytes\n.......", data.inputFiles[i], fileSize);
 
             fclose(inputFile);
         }
     } else {
-        if (verbose) {
+        if (data.verbose) {
             printf("Leyendo datos desde la entrada estándar (stdin)\n");
         }
 
@@ -193,7 +209,7 @@ void createArchive(const char *outputFile, char **inputFiles, int numInputFiles,
 
             fileSize += bytesRead;
 
-            if (veryVerbose) {
+            if (data.veryVerbose) {
                 printf("Bloque %zu leído desde stdin y escrito en la posición %zu\n", blockPosition, blockPosition);
             }
         }
@@ -516,47 +532,53 @@ void appendFilesToArchive(const char *archive_name, char **filenames, int num_fi
      
 int main(int argc, char *argv[]) {
     int opt;
-    bool verbose = false;
-    bool veryVerbose = false;
-    bool create = false;
-    bool extract = false;
-    bool list = false;
-    bool del = false;
-    bool update = false;
-    bool defrag = false;
-    bool append = false;
-    const char* outputFile = NULL;
-    char** inputFiles = NULL;
-    int numInputFiles = 0;
+    struct Data data = {
+    			false,
+    			false,
+    			false,
+    			false,
+    			false,
+    			false,
+    			false,
+    			false,
+    			false,
+    			false,
+    			NULL,
+    			NULL,
+    			0
+   	};
 
 		while ((opt = getopt(argc, argv, "cxtduvrpf:")) != -1) {
 				switch (opt) {
 				    case 'c':
-				        create = true;
+				        data.create = true;
 				        break;
 				    case 'x':
-				        extract = true;
+				        data.extract = true;
 				        break;
 				    case 't':
-				        list = true;
+				        data.list = true;
 				        break;
 				    case 'd':
-				        del = true;
+				        data.delete = true;
 				        break;
 				    case 'u':
-				        update = true;
+				        data.update = true;
 				        break;
 				    case 'v':
-				        verbose = true;
+				    		if (data.verbose) {
+				    			data.veryVerbose = true;
+				    		}
+				        data.verbose = true;
 				        break;
 				    case 'r':
-				        append = true;
+				        data.append = true;
 				        break;
 				    case 'p':
-				        defrag = true;
+				        data.defrag = true;
 				        break;
 				    case 'f':
-				        outputFile = optarg;
+				        data.file = true;
 				        break;
 				    default:
 				        fprintf(stderr, "Uso: %s [-cxtduvrp] [-f archivo] [archivos...]\n", argv[0]);
@@ -564,31 +586,29 @@ int main(int argc, char *argv[]) {
 				}
 		}
 		
-		optind = optind;
-		
-    if ((create || append) && outputFile == NULL && optind < argc) {
-        outputFile = argv[optind++];
+    if (optind < argc) {
+        data.outputFile = argv[optind++];
     }
 
-    numInputFiles = argc - optind;
-    if (numInputFiles > 0) {
-        inputFiles = &argv[optind];
+    data.numInputFiles = argc - optind;
+    if (data.numInputFiles > 0) {
+        data.inputFiles = &argv[optind];
     }
 
-    if (create) {
-        createArchive(outputFile, inputFiles, numInputFiles, verbose, veryVerbose, false);
-    } else if (extract) {
-        extractArchive(outputFile, verbose, veryVerbose);
-    } else if (list) {
-        listArchiveContents(outputFile, verbose);
-    } else if (del) {
-        deleteFilesFromArchive(outputFile, inputFiles, numInputFiles, verbose, veryVerbose);
-    } else if (update) {
-        updateFilesInArchive(outputFile, inputFiles, numInputFiles, verbose, veryVerbose);
-    } else if (defrag) {
-        defragmentArchive(outputFile, verbose, veryVerbose);
-    } else if (append) {
-        appendFilesToArchive(outputFile, inputFiles, numInputFiles, verbose, veryVerbose);
+    if (data.create) {
+        createArchive(data);
+    } else if (data.extract) {
+        extractArchive(data.outputFile, data.verbose, data.veryVerbose);
+    } else if (data.list) {
+        listArchiveContents(data.outputFile, data.verbose);
+    } else if (data.delete) {
+        deleteFilesFromArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
+    } else if (data.update) {
+        updateFilesInArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
+    } else if (data.defrag) {
+        defragmentArchive(data.outputFile, data.verbose, data.veryVerbose);
+    } else if (data.append) {
+        appendFilesToArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
     }
 
     return 0;
