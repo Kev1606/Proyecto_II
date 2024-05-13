@@ -49,6 +49,7 @@ void expandArchive(FILE* archive, FileAllocationTable* fat) {
 }
 
 void listArchiveContents(const char* archiveName, bool verbose) {
+		//printf("%s\n", archiveName);
     FILE* archive = fopen(archiveName, "rb");
     if (archive == NULL) {
         fprintf(stderr, "Error al abrir el archivo empacado.\n");
@@ -58,7 +59,7 @@ void listArchiveContents(const char* archiveName, bool verbose) {
     FileAllocationTable fat;
     fread(&fat, sizeof(FileAllocationTable), 1, archive);
 
-    printf("Contenido del archivo empacado:\n");
+    printf("Contenido del archivo:\n");
     printf("-------------------------------\n");
 
     for (size_t i = 0; i < fat.numFiles; i++) {
