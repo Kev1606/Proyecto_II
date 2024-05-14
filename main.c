@@ -4,6 +4,8 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <time.h>
 
 #define BLOCK_SIZE 262144 // 256 KB
 #define MAX_FILES 100
@@ -443,18 +445,14 @@ void defragmentArchive(const char *archive_name, bool verbose, bool very_verbose
 
 void appendFilesToArchive(const char *archive_name, char **filenames, int num_files, bool verbose, bool very_verbose) {
     FILE *archive = fopen(archive_name, "rb+");
-    printf("Bien1 \n");
-    printf("%d \n", num_files);
     if (archive == NULL) {
         fprintf(stderr, "Error opening packed file.\n");
         return;
     }
-		printf("Bien2 \n");
     FileAllocationTable fat;
     fread(&fat, sizeof(FileAllocationTable), 1, archive);
 
     if (num_files == 0) {
-    		printf("Bien3 en 0 \n");
         // Leer desde la entrada estándar (stdin)
         char *filename = "stdin";
         size_t file_size = 0;
@@ -483,9 +481,7 @@ void appendFilesToArchive(const char *archive_name, char **filenames, int num_fi
             printf("Contents of stdin added to the packed file as '%s'.\n", filename);
         }
     } else {
-    		printf("Bien3 en N \n");
         // Agregar archivos especificados
-        printf("%d\n", num_files); 
         for (int i = 0; i < num_files; i++) {
             const char *filename = filenames[i];
             FILE *input_file = fopen(filename, "rb");
@@ -532,6 +528,14 @@ void appendFilesToArchive(const char *archive_name, char **filenames, int num_fi
 }
      
 int main(int argc, char *argv[]) {
+		
+		// analisis de tiempo de ejecucion
+		clock_t start, end;
+    double cpu_time_used;
+    
+    // analisis de uso de memoria
+    struct rusage r_usage;
+    
     int opt;
     struct Data data = {
     			false,
@@ -576,7 +580,6 @@ int main(int argc, char *argv[]) {
 				        data.file = true;
 				        break;
 				    case 'r':
-				    		printf("Entre \n");
 				        data.append = true;
 				        break;
 				    case 'p':
@@ -588,12 +591,13 @@ int main(int argc, char *argv[]) {
 				}
 		}
 		
+		start = clock();
+		
     if (optind < argc) {
         data.outputFile = argv[optind++];
     }
 
     data.numInputFiles = argc - optind;
-    printf("HOLAAA %d \n", data.numInputFiles);
     if (data.numInputFiles > 0) {
         data.inputFiles = &argv[optind];
     }
@@ -607,13 +611,22 @@ int main(int argc, char *argv[]) {
     } else if (data.update) {
         updateFilesInArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
     } else if (data.append) {
-    		printf("prueba \n");
         appendFilesToArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
     } else if (data.defrag) {
         defragmentArchive(data.outputFile, data.verbose, data.veryVerbose);
     } else if (data.list) {
         listArchiveContents(data.outputFile, data.verbose);
     }
+    
+    // Fin de la medición del tiempo de ejecución
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Tiempo de ejecución: %f segundos\n", cpu_time_used);
+    
+   	// Comienzo del análisis de uso de memoria
+    getrusage(RUSAGE_SELF, &r_usage);
+    printf("Memoria utilizada (en bytes): %ld\n", r_usage.ru_maxrss);
+    // Fin del análisis de uso de memoria
 
     return 0;
 }
