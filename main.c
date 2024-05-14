@@ -68,14 +68,14 @@ void listArchiveContents(const char* archiveName, bool verbose) {
 		//printf("%s\n", archiveName);
     FILE* archive = fopen(archiveName, "rb");
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo empacado.\n");
+        fprintf(stderr, "Error opening the packed file.\n");
         return;
     }
 
     FileAllocationTable fat;
     fread(&fat, sizeof(FileAllocationTable), 1, archive);
 
-    printf("Contenido del archivo:\n");
+    printf("Contents of the packaged file:\n");
     printf("-------------------------------\n");
 
     for (size_t i = 0; i < fat.numFiles; i++) {
@@ -83,7 +83,7 @@ void listArchiveContents(const char* archiveName, bool verbose) {
         printf("%s\t%zu bytes\n", entry.fileName, entry.fileSize);
 
         if (verbose) {
-            printf("  Bloques: ");
+            printf("  Blocks: ");
             for (size_t j = 0; j < entry.numBlocks; j++) {
                 printf("%zu ", entry.blockPositions[j]);
             }
@@ -122,34 +122,30 @@ void writeFAT(FILE* archive, FileAllocationTable* fat) {
 }
 
 void createArchive(struct Data data) {
-    if (data.verbose) printf("Creando archivo %s\n.......", data.outputFile);
+    if (data.verbose) printf("Creating the file %s\n.......", data.outputFile);
     FILE* archive = fopen(data.outputFile, "wb");
 
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo %s\n", data.outputFile);
+        fprintf(stderr, "Error opening the file %s\n", data.outputFile);
         exit(EXIT_FAILURE);
     }
 
     FileAllocationTable fat;
     memset(&fat, 0, sizeof(FileAllocationTable));
 
-    if (!data.append) {
-        fat.freeBlocks[0] = sizeof(FileAllocationTable);
-        fat.numFreeBlocks = 1;
-        fwrite(&fat, sizeof(FileAllocationTable), 1, archive);
-    } else {
-        fread(&fat, sizeof(FileAllocationTable), 1, archive);
-    }
+    fat.freeBlocks[0] = sizeof(FileAllocationTable);
+    fat.numFreeBlocks = 1;
+    fwrite(&fat, sizeof(FileAllocationTable), 1, archive);
 
     if (data.numInputFiles > 0 && data.file) {
         for (int i = 0; i < data.numInputFiles; i++) {
             FILE* inputFile = fopen(data.inputFiles[i], "rb");
             if (inputFile == NULL) {
-                fprintf(stderr, "Error al abrir el archivo %s\n", data.inputFiles[i]);
+                fprintf(stderr, "Error opening the file %s\n", data.inputFiles[i]);
                 continue;
             }
 
-            if (data.verbose) printf("Agregando archivo %s\n.......", data.inputFiles[i]);
+            if (data.verbose) printf("Adding file %s\n.......", data.inputFiles[i]);
             size_t fileSize = 0;
             Block block;
             size_t bytesRead;
@@ -158,12 +154,12 @@ void createArchive(struct Data data) {
                 size_t blockPosition = findFreeBlock(&fat);
                 if (blockPosition == (size_t)-1) {
                     if (data.veryVerbose) {
-                        printf("No hay bloques libres, expandiendo el archivo\n");
+                        printf("No free blocks, expanding the file\n");
                     }
                     expandArchive(archive, &fat);
                     blockPosition = findFreeBlock(&fat);
                     if (data.veryVerbose) {
-                        printf("Nuevo bloque libre en la posición %zu\n.......", blockPosition);
+                        printf("New free block in position %zu\n.......", blockPosition);
                     }
                 }
 
@@ -177,17 +173,17 @@ void createArchive(struct Data data) {
                 fileSize += bytesRead;
 
                 if (data.veryVerbose) {
-                    printf("Escribiendo bloque %zu para archivo %s\n.......", blockPosition, data.inputFiles[i]);
+                    printf("Writing block %zu to file %s\n.......", blockPosition, data.inputFiles[i]);
                 }
             }
 
-            if (data.verbose) printf("Tamaño del archivo %s: %zu bytes\n.......", data.inputFiles[i], fileSize);
+            if (data.verbose) printf("File size %s: %zu bytes\n.......", data.inputFiles[i], fileSize);
 
             fclose(inputFile);
         }
     } else {
         if (data.verbose) {
-            printf("Leyendo datos desde la entrada estándar (stdin)\n");
+            printf("Reading data from standard input (stdin)\n");
         }
 
         size_t fileSize = 0;
@@ -210,7 +206,7 @@ void createArchive(struct Data data) {
             fileSize += bytesRead;
 
             if (data.veryVerbose) {
-                printf("Bloque %zu leído desde stdin y escrito en la posición %zu\n", blockPosition, blockPosition);
+                printf("Block %zu read from stdin and written to position %zu\n", blockPosition, blockPosition);
             }
         }
     }
@@ -222,7 +218,7 @@ void createArchive(struct Data data) {
 void extractArchive(const char* archiveName, bool verbose, bool veryVerbose) {
     FILE* archive = fopen(archiveName, "rb");
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo empacado.\n");
+        fprintf(stderr, "Error opening packed file.\n");
         return;
     }
 
@@ -233,12 +229,12 @@ void extractArchive(const char* archiveName, bool verbose, bool veryVerbose) {
         FileMetadata entry = fat.files[i];
         FILE* outputFile = fopen(entry.fileName, "wb");
         if (outputFile == NULL) {
-            fprintf(stderr, "Error al crear el archivo de salida: %s\n", entry.fileName);
+            fprintf(stderr, "Error creating output file: %s\n", entry.fileName);
             continue;
         }
 
         if (verbose) {
-            printf("Extrayendo archivo: %s\n", entry.fileName);
+            printf("Extracting file: %s\n", entry.fileName);
         }
 
         size_t fileSize = 0;
@@ -253,7 +249,7 @@ void extractArchive(const char* archiveName, bool verbose, bool veryVerbose) {
             fileSize += bytesToWrite;
 
             if (veryVerbose) {
-                printf("Bloque %zu del archivo %s extraído de la posición %zu\n", j + 1, entry.fileName, entry.blockPositions[j]);
+                printf("Block %zu of the file %s extracted from the position %zu\n", j + 1, entry.fileName, entry.blockPositions[j]);
             }
         }
 
@@ -266,7 +262,7 @@ void extractArchive(const char* archiveName, bool verbose, bool veryVerbose) {
 void deleteFilesFromArchive(const char* archiveName, char** fileNames, int numFiles, bool verbose, bool veryVerbose) {
     FILE* archive = fopen(archiveName, "rb+");
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo empacado.\n");
+        fprintf(stderr, "Error opening packed file.\n");
         return;
     }
 
@@ -284,7 +280,7 @@ void deleteFilesFromArchive(const char* archiveName, char** fileNames, int numFi
                 for (size_t k = 0; k < fat.files[j].numBlocks; k++) {
                     fat.freeBlocks[fat.numFreeBlocks++] = fat.files[j].blockPositions[k];
                     if (veryVerbose) {
-                        printf("Bloque %zu del archivo '%s' marcado como libre.\n", fat.files[j].blockPositions[k], fileName);
+                        printf("Block %zu of file '%s' marked as free.\n", fat.files[j].blockPositions[k], fileName);
                     }
                 }
 
@@ -294,7 +290,7 @@ void deleteFilesFromArchive(const char* archiveName, char** fileNames, int numFi
                 fat.numFiles--;
 
                 if (verbose) {
-                    printf("Archivo '%s' eliminado del archivo empacado.\n", fileName);
+                    printf("File '%s' removed from packed file.\n", fileName);
                 }
 
                 break;
@@ -302,7 +298,7 @@ void deleteFilesFromArchive(const char* archiveName, char** fileNames, int numFi
         }
 
         if (!fileFound) {
-            fprintf(stderr, "Archivo '%s' no encontrado en el archivo empacado.\n", fileName);
+            fprintf(stderr, "File '%s' not found in packed file.\n", fileName);
         }
     }
 
@@ -315,7 +311,7 @@ void deleteFilesFromArchive(const char* archiveName, char** fileNames, int numFi
 void updateFilesInArchive(const char* archiveName, char** fileNames, int numFiles, bool verbose, bool veryVerbose) {
     FILE* archive = fopen(archiveName, "rb+");
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo empacado.\n");
+        fprintf(stderr, "Error opening packed file.\n");
         return;
     }
 
@@ -333,13 +329,13 @@ void updateFilesInArchive(const char* archiveName, char** fileNames, int numFile
                 for (size_t k = 0; k < fat.files[j].numBlocks; k++) {
                     fat.freeBlocks[fat.numFreeBlocks++] = fat.files[j].blockPositions[k];
                     if (veryVerbose) {
-                        printf("Bloque %zu del archivo '%s' marcado como libre.\n", fat.files[j].blockPositions[k], fileName);
+                        printf("Block %zu of file '%s' marked as free.\n", fat.files[j].blockPositions[k], fileName);
                     }
                 }
 
                 FILE* inputFile = fopen(fileName, "rb");
                 if (inputFile == NULL) {
-                    fprintf(stderr, "Error al abrir el archivo de entrada: %s\n", fileName);
+                    fprintf(stderr, "Error opening input file: %s\n", fileName);
                     continue;
                 }
 
@@ -360,7 +356,7 @@ void updateFilesInArchive(const char* archiveName, char** fileNames, int numFile
                     fileSize += bytesRead;
 
                     if (veryVerbose) {
-                        printf("Bloque %zu del archivo '%s' actualizado en la posición %zu\n", blockCount, fileName, blockPosition);
+                        printf("Block %zu of the file '%s' updated in position %zu\n", blockCount, fileName, blockPosition);
                     }
                 }
 
@@ -370,7 +366,7 @@ void updateFilesInArchive(const char* archiveName, char** fileNames, int numFile
                 fclose(inputFile);
 
                 if (verbose) {
-                    printf("Archivo '%s' actualizado en el archivo empacado.\n", fileName);
+                    printf("File '%s' updated in the packed file.\n", fileName);
                 }
 
                 break;
@@ -378,7 +374,7 @@ void updateFilesInArchive(const char* archiveName, char** fileNames, int numFile
         }
 
         if (!fileFound) {
-            fprintf(stderr, "Archivo '%s' no encontrado en el archivo empacado.\n", fileName);
+            fprintf(stderr, "File '%s' not found in packed file.\n", fileName);
         }
      }
      
@@ -391,7 +387,7 @@ void updateFilesInArchive(const char* archiveName, char** fileNames, int numFile
 void defragmentArchive(const char *archive_name, bool verbose, bool very_verbose) {
     FILE *archive = fopen(archive_name, "rb+");
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo empacado.\n");
+        fprintf(stderr, "Error opening packed file.\n");
         return;
     }
 
@@ -416,14 +412,14 @@ void defragmentArchive(const char *archive_name, bool verbose, bool very_verbose
             file_size += sizeof(Block);
 
             if (very_verbose) {
-                printf("Bloque %zu del archivo '%s' movido a la posición %zu\n", j + 1, entry->fileName, entry->blockPositions[j]);
+                printf("Block %zu of file '%s' moved to position %zu\n", j + 1, entry->fileName, entry->blockPositions[j]);
             }
         }
 
         entry->fileSize = file_size;
 
         if (verbose) {
-            printf("Archivo '%s' desfragmentado.\n", entry->fileName);
+            printf("Defragmented '%s' file.\n", entry->fileName);
         }
     }
 
@@ -447,15 +443,18 @@ void defragmentArchive(const char *archive_name, bool verbose, bool very_verbose
 
 void appendFilesToArchive(const char *archive_name, char **filenames, int num_files, bool verbose, bool very_verbose) {
     FILE *archive = fopen(archive_name, "rb+");
+    printf("Bien1 \n");
+    printf("%d \n", num_files);
     if (archive == NULL) {
-        fprintf(stderr, "Error al abrir el archivo empacado.\n");
+        fprintf(stderr, "Error opening packed file.\n");
         return;
     }
-
+		printf("Bien2 \n");
     FileAllocationTable fat;
     fread(&fat, sizeof(FileAllocationTable), 1, archive);
 
     if (num_files == 0) {
+    		printf("Bien3 en 0 \n");
         // Leer desde la entrada estándar (stdin)
         char *filename = "stdin";
         size_t file_size = 0;
@@ -476,20 +475,22 @@ void appendFilesToArchive(const char *archive_name, char **filenames, int num_fi
             block_count++;
 
             if (very_verbose) {
-                printf("Bloque %zu leído desde stdin y agregado en la posición %zu\n", block_count, block_position);
+                printf("Block %zu read from stdin and added at position %zu\n", block_count, block_position);
             }
         }
 
         if (verbose) {
-            printf("Contenido de stdin agregado al archivo empacado como '%s'.\n", filename);
+            printf("Contents of stdin added to the packed file as '%s'.\n", filename);
         }
     } else {
+    		printf("Bien3 en N \n");
         // Agregar archivos especificados
+        printf("%d\n", num_files); 
         for (int i = 0; i < num_files; i++) {
             const char *filename = filenames[i];
             FILE *input_file = fopen(filename, "rb");
             if (input_file == NULL) {
-                fprintf(stderr, "Error al abrir el archivo de entrada: %s\n", filename);
+                fprintf(stderr, "Error opening input file: %s\n", filename);
                 continue;
             }
 
@@ -511,14 +512,14 @@ void appendFilesToArchive(const char *archive_name, char **filenames, int num_fi
                 block_count++;
 
                 if (very_verbose) {
-                    printf("Bloque %zu del archivo '%s' agregado en la posición %zu\n", block_count, filename, block_position);
+                    printf("Block %zu of the file '%s' added at position %zu\n", block_count, filename, block_position);
                 }
             }
 
             fclose(input_file);
 
             if (verbose) {
-                printf("Archivo '%s' agregado al archivo empacado.\n", filename);
+                printf("File '%s' added to the packed file.\n", filename);
             }
         }
     }
@@ -548,7 +549,7 @@ int main(int argc, char *argv[]) {
     			0
    	};
 
-		while ((opt = getopt(argc, argv, "cxtduvrpf:")) != -1) {
+		while ((opt = getopt(argc, argv, "cxtduvwfrp:")) != -1) {
 				switch (opt) {
 				    case 'c':
 				        data.create = true;
@@ -571,17 +572,18 @@ int main(int argc, char *argv[]) {
 				    		}
 				        data.verbose = true;
 				        break;
+				   	case 'f':
+				        data.file = true;
+				        break;
 				    case 'r':
+				    		printf("Entre \n");
 				        data.append = true;
 				        break;
 				    case 'p':
 				        data.defrag = true;
 				        break;
-				    case 'f':
-				        data.file = true;
-				        break;
 				    default:
-				        fprintf(stderr, "Uso: %s [-cxtduvrp] [-f archivo] [archivos...]\n", argv[0]);
+				        fprintf(stderr, "Usage: %s [-cxtduvwfrp] [-f file] [files...]\n", argv[0]);
 				        exit(EXIT_FAILURE);
 				}
 		}
@@ -591,6 +593,7 @@ int main(int argc, char *argv[]) {
     }
 
     data.numInputFiles = argc - optind;
+    printf("HOLAAA %d \n", data.numInputFiles);
     if (data.numInputFiles > 0) {
         data.inputFiles = &argv[optind];
     }
@@ -599,16 +602,17 @@ int main(int argc, char *argv[]) {
         createArchive(data);
     } else if (data.extract) {
         extractArchive(data.outputFile, data.verbose, data.veryVerbose);
-    } else if (data.list) {
-        listArchiveContents(data.outputFile, data.verbose);
     } else if (data.delete) {
         deleteFilesFromArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
     } else if (data.update) {
         updateFilesInArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
+    } else if (data.append) {
+    		printf("prueba \n");
+        appendFilesToArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
     } else if (data.defrag) {
         defragmentArchive(data.outputFile, data.verbose, data.veryVerbose);
-    } else if (data.append) {
-        appendFilesToArchive(data.outputFile, data.inputFiles, data.numInputFiles, data.verbose, data.veryVerbose);
+    } else if (data.list) {
+        listArchiveContents(data.outputFile, data.verbose);
     }
 
     return 0;
